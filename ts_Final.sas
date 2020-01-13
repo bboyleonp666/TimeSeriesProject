@@ -1,9 +1,20 @@
-%let dir=D:\時間數列分析\Final_project\data;
-%let file_japan=nominal_GDP_Japan.xlsx;
-%let file_taiwan=nominal_GDP_Taiwan.xlsx;
-%let file_china=nominal_GDP_China.xlsx;
+%macro datasets_dir;
+%local fr rc cwd;
+%let rc = %sysfunc(filename(fr,.));
+%let cwd = %sysfunc(pathname(&fr));
+%let rc = %sysfunc(filename(fr));
 
-proc import datafile = "&dir\&file_japan" out = Japan
+%let data = data;
+%let datasets_dir = &cwd\data;
+&datasets_dir
+%mend datasets_dir;
+
+/*%let dir=D:\時間數列分析\Final_project\data;*/
+%let file_japan = nominal_GDP_Japan.xlsx;
+%let file_taiwan = nominal_GDP_Taiwan.xlsx;
+%let file_china = nominal_GDP_China.xlsx;
+
+proc import datafile = "%datasets_dir\&file_japan" out = Japan
 dbms = xlsx replace;
 datarow = 4;
 getnames = no;
@@ -18,7 +29,7 @@ proc sort;
 by time;
 proc print; run;
 
-proc import datafile = "&dir\&file_taiwan" out = Taiwan
+proc import datafile = "%datasets_dir\&file_taiwan" out = Taiwan
 dbms = xlsx replace;
 datarow = 4;
 getnames = no;
@@ -33,7 +44,7 @@ proc sort;
 by time;
 proc print; run;
 
-proc import datafile = "&dir\&file_china" out = China
+proc import datafile = "%datasets_dir\&file_china" out = China
 dbms = xlsx replace;
 datarow = 4;
 getnames = no;
