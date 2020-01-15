@@ -24,9 +24,9 @@ var netincome;
 data Flight_NetIncome;
 set flight_netincome_wide(drop = _name_);
 rename
-	Netincome2610 = China_net
-	Netincome2612 = AirChina_net
-	Netincome2618 = Eva_net;
+	Netincome2610 = net_China
+	Netincome2612 = net_AirChina
+	Netincome2618 = net_Eva;
 label
 	time = "年月"
 	Netincome2610 = "華航毛利"
@@ -48,9 +48,9 @@ var income;
 data Flight_Income;
 set flight_income_wide(drop = _name_);
 rename
-	income2610 = China
-	income2612 = AirChina
-	income2618 = Eva;
+	income2610 = income_China
+	income2612 = income_AirChina
+	income2618 = income_Eva;
 label
 	time = "年月"
 	income2610 = "華航營收"
@@ -69,7 +69,7 @@ proc print; run;
 /*淨營收*/
 proc gplot data = Flight;
 title "Time Series Plot for Income";
-plot China * time AirChina*time Eva*time/overlay legend;
+plot income_: *time / overlay legend;
 symbol1 interpol = join value = line c = blue v = dot; 
 symbol2 interpol = join value = line c = green v = dot;
 symbol3 interpol = join value = line c = red v = dot;
@@ -77,7 +77,7 @@ run;
 /*淨毛利*/
 proc gplot data = Flight;
 title "Time Series Plot for Net Income";
-plot China_net * time AirChina_net*time Eva_net*time/overlay legend;
+plot net_: * time / overlay legend;
 symbol1 interpol = join value = line c = blue v = dot; 
 symbol2 interpol = join value = line c = green v = dot;
 symbol3 interpol = join value = line c = red v = dot;
@@ -85,41 +85,72 @@ run;
 
 /*中國航空*/
 proc arima data = Flight;
-identify var = airchina_net nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
+identify var = net_airchina nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
 run;
 proc arima data = Flight;
-identify var = airchina_net(1) nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
+identify var = net_airchina(1) nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
 run;
 proc arima data = Flight;
-identify var = airchina_net(1) nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
+identify var = net_airchina(1) nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
 estimate p = 4 method = ml;
 run;
 
 /*長榮航空*/
-proc arima data = Flight_Netincome;
-identify var = eva_net nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
+proc arima data = Flight;
+identify var = net_eva nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
 run;
-proc arima data = Flight_Netincome;
-identify var = eva_net(1) nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
+proc arima data = Flight;
+identify var = net_eva(1) nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
 run;
-proc arima data = Flight_Netincome;
-identify var = eva_net(1) nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
+proc arima data = Flight;
+identify var = net_eva(1) nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
 estimate p = 3 method = ml;
 run;
 
 /*中華航空*/
-proc arima data = Flight_Netincome;
-identify var = china_net nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
+proc arima data = Flight;
+identify var = net_china nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
 run;
-proc arima data = Flight_Netincome;
-identify var = china_net nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
+proc arima data = Flight;
+identify var = net_china nlag = 15 stationarity = (adf=4); *test stationarity by agument dickey-fuller test;
 estimate p = 5 method = ml;
 run;
 
-
-
-proc varmax data = Flight_Netincome;
-id time interval=qtr;
-model hua chan / p=1 noint lagmax=3 print=(estimates diagnose);
-output out=for lead=5;
+%macro VARModel;
+ods select none;
+proc varmax data = flight;
+model net: / p = &i noint lagmax = 3
+                 print = (estimates diagnose);
+ods output LogLikelihood = LLH;
+ods output InfoCriteria = IC;
+/*output out=for lead=5;*/
 run;
+data Info;
+set LLH IC;
+if _n_ in (1 4);
+drop cvalue1;
+if label1 = "對數概度" then label1 = "LogLike";
+rename 
+	label1 = Criterion
+	nvalue1 = Value;
+proc print; run;
+proc transpose data = Info 
+	out = Info_T(drop = _name_);
+var value;
+id Criterion;
+data InfoTable_&i;
+p = &i;
+set info_t;
+run;
+ods select all;
+%mend VARModel;
+
+%macro All_VARModel;
+%do i = 1 %to 10;
+	%VARModel(&i);
+%end;
+data AllModel;
+set InfoTable_:;
+proc print data = AllModel; run;
+%mend All_VARModel;
+%All_VARModel;
