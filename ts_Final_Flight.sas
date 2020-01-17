@@ -1,3 +1,15 @@
+%macro All_VARModel;
+/*Variable Setting*/
+%let variables = d:;
+
+%do i = 1 %to 5;
+    %VARModel(flight_std, &variables, &i);
+%end;
+data AllModel;
+set InfoTable_&out:;
+proc print data = AllModel; run;
+%mend All_VARModel;
+%All_VARModel;
 /*Locate Dataset Directory*/
 %macro datasets_dir;
 %local fr rc cwd;
@@ -33,9 +45,9 @@ rename
 	Netincome2618 = net_Eva;
 label
 	time = "年月"
-	Netincome2610 = "華航毛利"
-	Netincome2612 = "中航毛利"
-	Netincome2618 = "長榮毛利";
+	Netincome2610 = "華航毛利 (China)"
+	Netincome2612 = "中航毛利 (Air China)"
+	Netincome2618 = "長榮毛利 (EVA)";
 if time < 200803 then delete;
 proc print data = flight_netincome label;
 run;
@@ -57,9 +69,9 @@ rename
 	income2618 = income_Eva;
 label
 	time = "年月"
-	income2610 = "華航營收"
-	income2612 = "中航營收"
-	income2618 = "長榮營收";
+	income2610 = "華航營收 (China)"
+	income2612 = "中航營收 (Air China)"
+	income2618 = "長榮營收 (EVA)";
 if time < 200803 then delete;
 proc print data = flight_income label;
 run;
@@ -69,7 +81,7 @@ proc import datafile = "%datasets_dir\&Oil_file" out = temp
 data Oil_Price;
 set temp;
 rename POILBREUSDM = Oil_Price;
-
+label POILBREUSDM = "油價 (Oil Price)";
 	/*Process Time Data*/
 	Year = year(date);
 	if month(date) = 1 then YEAR = year - 1;
@@ -83,53 +95,62 @@ if time < 200803 then delete;
 keep POILBREUSDM Time;
 proc sort;
 by time;
-proc print; run;
+proc print label; run;
 
 /*Merge Income and Net Income*/
 data Flight;
 merge Flight_Income Flight_NetIncome Oil_Price;
 by time;
+drop income_airchina net_airchina; *drop data related to Air China;
 proc print; run;
-
+/*Standardize the data*/
+proc standard data = flight mean = 0 std = 1 out = Flight_Std;
+var income: net: oil_price;
+proc print data = flight_Std; run;
 
 /*Time Series Plots*/
 /*Income*/
-proc gplot data = Flight;
-title "Time Series Plot for Income";
-plot (income_:) *time / overlay legend;
-symbol1 interpol = join value = line c = blue v = dot; 
-symbol2 interpol = join value = line c = green v = dot;
-symbol3 interpol = join value = line c = red v = dot;
+ods graphics on / width = 1080px;
+proc sgplot data = flight_std;
+title height = 25pt "Time Series Plot for Income and Oil Price";
+series x = time y = income_china / lineattrs = (color=blue thickness=3);
+series x = time y = income_eva / lineattrs = (color=green thickness=3);
+series x = time y =  oil_price / lineattrs = (color=red thickness=3);
+yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10);
+xaxis label = "Season" labelattrs = (size=15);
+/*xaxis label = "Season" labelattrs = (size=15)  valuesrotate = diagnoal2;*/
 run;
 /*Net Income*/
-proc gplot data = Flight;
-title "Time Series Plot for Net Income";
-plot (net_:) * time / overlay legend;
-symbol1 interpol = join value = line c = blue v = dot; 
-symbol2 interpol = join value = line c = green v = dot;
-symbol3 interpol = join value = line c = red v = dot;
+proc sgplot data = flight_std;
+title height = 25pt "Time Series Plot for Net Income and Oil Price";
+series x = time y = net_china / lineattrs = (color=blue thickness=3);
+series x = time y = net_eva / lineattrs = (color=green thickness=3);
+series x = time y =  oil_price / lineattrs = (color=red thickness=3);
+yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10);
+xaxis label = "Season" labelattrs = (size=15);
+/*xaxis label = "Season" labelattrs = (size=15)  valuesrotate = diagnoal2;*/
 run;
 
 /*中國航空 Air China*/
-proc arima data = Flight;
-identify var = net_airchina nlag = 15 stationarity = (adf=4);
-run;
-proc arima data = Flight;
-identify var = net_airchina(1) nlag = 15 stationarity = (adf=4);
-run;
-proc arima data = Flight;
-identify var = net_airchina(1) nlag = 15 stationarity = (adf=4);
-estimate p = 3 method = ml;
-ods output ResidualCorrPanel = res_net_AirChina;
-run;
-
-data res_NetAirchina;
-set res_net_AirChina(keep = residual);
-res_sq = residual**2;
-proc arima data = res_NetAirchina;
-identify var = res_sq nlag = 12 stationarity = (adf=4);
-estimate p=5;
-run;
+/*proc arima data = Flight;*/
+/*identify var = net_airchina nlag = 15 stationarity = (adf=4);*/
+/*run;*/
+/*proc arima data = Flight;*/
+/*identify var = net_airchina(1) nlag = 15 stationarity = (adf=4);*/
+/*run;*/
+/*proc arima data = Flight;*/
+/*identify var = net_airchina(1) nlag = 15 stationarity = (adf=4);*/
+/*estimate p = 3 method = ml;*/
+/*ods output ResidualCorrPanel = res_net_AirChina;*/
+/*run;*/
+/**/
+/*data res_NetAirchina;*/
+/*set res_net_AirChina(keep = residual);*/
+/*res_sq = residual**2;*/
+/*proc arima data = res_NetAirchina;*/
+/*identify var = res_sq nlag = 12 stationarity = (adf=4);*/
+/*estimate p=5;*/
+/*run;*/
 /*Final model ARIMA(3,1,0)-ARCH(5)*/
 
 /*長榮航空 EVA*/
@@ -181,11 +202,79 @@ proc arima data = res_NetChina;
 identify var = res_sq nlag = 12 stationarity = (adf=4);
 run;
 
-%macro VARModel;
+
+/*Fit VAR Model*/
+/*proc varmax data = flight;*/
+/*model net: / p = 1 noint dftest cointtest=(johansen);*/
+/*title "Without Normalization";*/
+/*run;*/
+/*proc varmax data = flight;*/
+/*model net: / p = 1 cointtest = (johansen=(normalize=net_china));*/
+/*title "With Normalization";*/
+/*run;*/
+/**/
+/*proc varmax data = flight;*/
+/*   model net: / p = 2 noint dftest cointtest=(johansen);*/
+/*run;*/
+/**/
+/*proc varmax data = flight;*/
+/*model  net: / p = 1 dftest lagmax = 6 */
+/*					print = (iarr estimates diagnose)*/
+/*					cointtest = (johansen=(normalize=net_china));*/
+/*cointeg rank = 1 normalize = net_china;*/
+/*run;*/
+
+
+
+/*Fit VAR model of income*/
+/*------------------------------------------------------------------------------------------------------------------*/
+/*Analysis for Income*/
+data flight_adj;
+set flight;
+/*Add min value to variables containing negative value
+   Add 1 to avoid facing infinite while log transformation*/
+net_China = net_China + 1098628 + 1;
+net_Eva = net_Eva + 1652777 + 1;
+
+/*log transformation*/
+LogChina = log(income_china);
+LogEva = log(income_eva);
+net_LogChina = log(net_China);
+net_LogEva = log(net_Eva);
+LogOil = log(oil_price);
+
+/*differentiation the log income*/
+dLogChina = dif(logchina);
+dLogEva = dif(logeva);
+dLogOil = dif(logoil);
+dNet_LogChina = dif(net_LogChina);
+dNet_LogEva = dif(net_LogEva);
+proc print; run;
+/*Dickey-Fuller Test*/
+/*From inspectation: There is trend, trend model picked*/
+/*Non-stationary: log Oil_price 
+   Stationary: log China, log Eva*/
+
+%let dataset = flight_adj;                         *Name of dataset;
+%let log_income = Log:;                         *Variables for all the log transformated income;
+%let dlog_income = dLog:;                     *Variables for all the differentiated log tranformated income;
+%let log_net = net_Log: LogOil;             *Variables for all the log transformated net income;
+%let dlog_net = dNet_Log: dLogOil;      *Variables for all the differentiated log tranformated net income;
+proc varmax data = flight_adj;
+model &log_income / p = 1 dftest;
+run;
+/*first-differentiated*/
+proc varmax data = flight_LogIncome;
+model &dlog_income / p = 1 dftest;
+run;
+/*All are Stationary!!!*/
+
+/*------------------------------------------------------------------------------------------------------------------*/
+/*Model Selection*/
+%macro VARModel(dataset, var, P);
 ods select none;
-proc varmax data = flight;
-model net: / p = &i noint lagmax = 3 
-					print = (estimates diagnose);
+proc varmax data = &dataset;
+model &var / p = &P;
 ods output LogLikelihood = LLH;
 ods output InfoCriteria = IC;
 /*output out=for lead=5;*/
@@ -198,46 +287,70 @@ if label1 = "對數概度" then label1 = "LogLike";
 rename 
 	label1 = Criterion
 	nvalue1 = Value;
-proc print; run;
 proc transpose data = Info 
 	out = Info_T(drop = _name_);
 var value;
 id Criterion;
-data InfoTable_&i;
-p = &i;
+data InfoTable_&P;
+p = &P;
 set info_t;
 run;
 ods select all;
 %mend VARModel;
-
-%macro All_VARModel;
-%do i = 1 %to 10;
-	%VARModel(&i);
+%macro All_VARModel(dataset, var);
+%do i = 1 %to 5;
+	%VARModel(&dataset, &var, &i);
 %end;
 data AllModel;
 set InfoTable_:;
 proc print data = AllModel; run;
 %mend All_VARModel;
-%All_VARModel;
+/*------------------------------------------------------------------------------------------------------------------*/
 
 
-/*Fit VAR Model*/
-proc varmax data = flight;
-model net: / p = 1 noint dftest cointtest=(johansen);
-title "Without Normalization";
+/*Model selection for Operating Income*/
+%All_VARModel(&dataset, &dlog_income);
+/*Pick the one with smallest AIC value: 2*/
+/*Unit Root Test*/
+proc varmax data = flight_adj;
+model &dlog_income / p = 2 noint lagmax = 3 
+									 dftest cointtest=(johansen)
+									 print = (estimates diagnose);
 run;
-proc varmax data = flight;
-model net: / p = 1 cointtest = (johansen=(normalize=net_china));
-title "With Normalization";
+/*H0: non-stationary
+   Some Reject H0 while some not*/
+
+/*Granger Causality Test*/
+proc varmax data = flight_adj plot = impulse;
+model dLogOil = dlogchina dlogeva / p = 2
+															printform = univariate
+															print=(impulsx=(all) estimates);
+run;
+proc varmax data = flight_adj;
+model dlogchina = dlogeva / p = 2
+											  print=(impulsx=(all) estimates);
 run;
 
-proc varmax data = flight;
-   model net: / p = 2 noint dftest cointtest=(johansen);
+/*------------------------------------------------------------------------------------------------------------------*/
+/*Analysis for Net Income*/
+proc varmax data = flight_adj;
+model &log_net / p = 1 dftest;
 run;
+/*Inspect Trend P-value
+   Some are non-stationary some are stationary*/
 
-proc varmax data = flight;
-model  net: / p = 1 dftest lagmax = 6 
-					print = (iarr estimates diagnose)
-					cointtest = (johansen=(normalize=net_china));
-cointeg rank = 1 normalize = net_china;
+
+/*Model selection for Net income*/
+%All_VARModel(&dataset, &dlog_net);
+/*Min AIC: p = 2*/
+proc varmax data = flight_adj;
+model &dlog_net / p = 2 noint lagmax = 3 
+							  dftest cointtest=(johansen)
+							  print = (estimates diagnose);
 run;
+proc varmax data = flight_adj plot = impulse;
+model dLogOil = dnet: / p = 2
+									  printform = univariate
+									  print=(impulsx=(all) estimates);
+run;
+proc print data = flight_adj; run;
