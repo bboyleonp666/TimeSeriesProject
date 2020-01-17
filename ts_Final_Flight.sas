@@ -265,8 +265,15 @@ run;
    Some Reject H0 while some not*/
 
 /*Granger Causality Test*/
+proc varmax data = flight_adj;
+model logchina logeva = LogOil / p = 2 difx = (1) dify = (1);
+causal group1 = (logchina logeva) group2 = (LogOil);
+causal group1 = (logchina) group2 = (logeva);
+run;
+
+
 proc varmax data = flight_adj plot = impulse;
-model LogOil = logchina logeva / p = 2 difx = (1) dify = (1)
+model logchina logeva = LogOil  / p = 2 difx = (1) dify = (1)
 													  printform = univariate
 													  print = (impulsx=(all) estimates);
 run;
@@ -295,9 +302,17 @@ model &log_net / p = 2 noint lagmax = 3 dify = (1)
 							dftest cointtest=(johansen)
 							print = (estimates diagnose);
 run;
+proc print data = flight_adj; run;
+proc varmax data = flight_adj;
+model net_log: =  LogOil / p = 2 difx = (1) dify = (1)
+										  printform = univariate
+										  print = (impulsx=(all) estimates);
+causal group1 = (net_log:) group2 = (LogOil);
+causal group1 = (net_LogChina) group2 = (net_LogEva);
+run;
 proc varmax data = flight_adj plot = impulse;
-model LogOil = dnet: / p = 2 dify = (1)
-									printform = univariate
-									print = (impulsx=(all) estimates);
+model net_log: = LogOil  / p = 2 dify = (1)
+										  printform = univariate
+										  print = (impulsx=(all) estimates);
 run;
 proc print data = flight_adj; run;
