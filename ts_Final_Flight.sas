@@ -131,28 +131,6 @@ xaxis label = "Season" labelattrs = (size=15);
 /*xaxis label = "Season" labelattrs = (size=15)  valuesrotate = diagnoal2;*/
 run;
 
-/*中國航空 Air China*/
-/*proc arima data = Flight;*/
-/*identify var = net_airchina nlag = 15 stationarity = (adf=4);*/
-/*run;*/
-/*proc arima data = Flight;*/
-/*identify var = net_airchina(1) nlag = 15 stationarity = (adf=4);*/
-/*run;*/
-/*proc arima data = Flight;*/
-/*identify var = net_airchina(1) nlag = 15 stationarity = (adf=4);*/
-/*estimate p = 3 method = ml;*/
-/*ods output ResidualCorrPanel = res_net_AirChina;*/
-/*run;*/
-/**/
-/*data res_NetAirchina;*/
-/*set res_net_AirChina(keep = residual);*/
-/*res_sq = residual**2;*/
-/*proc arima data = res_NetAirchina;*/
-/*identify var = res_sq nlag = 12 stationarity = (adf=4);*/
-/*estimate p=5;*/
-/*run;*/
-/*Final model ARIMA(3,1,0)-ARCH(5)*/
-
 /*長榮航空 EVA*/
 proc arima data = Flight;
 identify var = net_eva nlag = 15 stationarity = (adf=4);
@@ -202,30 +180,6 @@ proc arima data = res_NetChina;
 identify var = res_sq nlag = 12 stationarity = (adf=4);
 run;
 
-
-/*Fit VAR Model*/
-/*proc varmax data = flight;*/
-/*model net: / p = 1 noint dftest cointtest=(johansen);*/
-/*title "Without Normalization";*/
-/*run;*/
-/*proc varmax data = flight;*/
-/*model net: / p = 1 cointtest = (johansen=(normalize=net_china));*/
-/*title "With Normalization";*/
-/*run;*/
-/**/
-/*proc varmax data = flight;*/
-/*   model net: / p = 2 noint dftest cointtest=(johansen);*/
-/*run;*/
-/**/
-/*proc varmax data = flight;*/
-/*model  net: / p = 1 dftest lagmax = 6 */
-/*					print = (iarr estimates diagnose)*/
-/*					cointtest = (johansen=(normalize=net_china));*/
-/*cointeg rank = 1 normalize = net_china;*/
-/*run;*/
-
-
-
 /*Fit VAR model of income*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Analysis for Income*/
@@ -242,13 +196,6 @@ LogEva = log(income_eva);
 net_LogChina = log(net_China);
 net_LogEva = log(net_Eva);
 LogOil = log(oil_price);
-
-/*differentiation the log income*/
-dLogChina = dif(logchina);
-dLogEva = dif(logeva);
-dLogOil = dif(logoil);
-dNet_LogChina = dif(net_LogChina);
-dNet_LogEva = dif(net_LogEva);
 proc print; run;
 /*Dickey-Fuller Test*/
 /*From inspectation: There is trend, trend model picked*/
@@ -257,24 +204,22 @@ proc print; run;
 
 %let dataset = flight_adj;                         *Name of dataset;
 %let log_income = Log:;                         *Variables for all the log transformated income;
-%let dlog_income = dLog:;                     *Variables for all the differentiated log tranformated income;
 %let log_net = net_Log: LogOil;             *Variables for all the log transformated net income;
-%let dlog_net = dNet_Log: dLogOil;      *Variables for all the differentiated log tranformated net income;
 proc varmax data = flight_adj;
 model &log_income / p = 1 dftest;
 run;
 /*first-differentiated*/
-proc varmax data = flight_LogIncome;
-model &dlog_income / p = 1 dftest;
+proc varmax data = flight_adj;
+model &log_income / p = 1 dify = (1) dftest;
 run;
 /*All are Stationary!!!*/
 
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Model Selection*/
-%macro VARModel(dataset, var, P);
+%macro VARModel(dataset, var, P, DIF);
 ods select none;
 proc varmax data = &dataset;
-model &var / p = &P;
+model &var / p = &P dify = (&DIF);
 ods output LogLikelihood = LLH;
 ods output InfoCriteria = IC;
 /*output out=for lead=5;*/
@@ -297,9 +242,9 @@ set info_t;
 run;
 ods select all;
 %mend VARModel;
-%macro All_VARModel(dataset, var);
+%macro All_VARModel(dataset, var, DIF);
 %do i = 1 %to 5;
-	%VARModel(&dataset, &var, &i);
+	%VARModel(&dataset, &var, &i, &DIF);
 %end;
 data AllModel;
 set InfoTable_:;
@@ -307,28 +252,27 @@ proc print data = AllModel; run;
 %mend All_VARModel;
 /*------------------------------------------------------------------------------------------------------------------*/
 
-
 /*Model selection for Operating Income*/
-%All_VARModel(&dataset, &dlog_income);
+%All_VARModel(&dataset, &log_income, 1);
 /*Pick the one with smallest AIC value: 2*/
 /*Unit Root Test*/
 proc varmax data = flight_adj;
-model &dlog_income / p = 2 noint lagmax = 3 
-									 dftest cointtest=(johansen)
-									 print = (estimates diagnose);
+model &log_income / p = 2 noint lagmax = 3 dify = (1)
+									dftest cointtest=(johansen)
+									print = (estimates diagnose);
 run;
 /*H0: non-stationary
    Some Reject H0 while some not*/
 
 /*Granger Causality Test*/
 proc varmax data = flight_adj plot = impulse;
-model dLogOil = dlogchina dlogeva / p = 2
-															printform = univariate
-															print=(impulsx=(all) estimates);
+model LogOil = logchina logeva / p = 2 difx = (1) dify = (1)
+													  printform = univariate
+													  print = (impulsx=(all) estimates);
 run;
 proc varmax data = flight_adj;
-model dlogchina = dlogeva / p = 2
-											  print=(impulsx=(all) estimates);
+model logchina = logeva / p = 2 difx = (1) dify = (1)
+										  print = (impulsx=(all) estimates);
 run;
 
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -338,19 +282,22 @@ model &log_net / p = 1 dftest;
 run;
 /*Inspect Trend P-value
    Some are non-stationary some are stationary*/
-
+proc varmax data = flight_adj;
+model &log_net / p = 1 dify = (1) dftest;
+run;
+/*All are Stationary!!!*/
 
 /*Model selection for Net income*/
-%All_VARModel(&dataset, &dlog_net);
+%All_VARModel(&dataset, &log_net, 1);
 /*Min AIC: p = 2*/
 proc varmax data = flight_adj;
-model &dlog_net / p = 2 noint lagmax = 3 
-							  dftest cointtest=(johansen)
-							  print = (estimates diagnose);
+model &log_net / p = 2 noint lagmax = 3 dify = (1)
+							dftest cointtest=(johansen)
+							print = (estimates diagnose);
 run;
 proc varmax data = flight_adj plot = impulse;
-model dLogOil = dnet: / p = 2
-									  printform = univariate
-									  print=(impulsx=(all) estimates);
+model LogOil = dnet: / p = 2 dify = (1)
+									printform = univariate
+									print = (impulsx=(all) estimates);
 run;
 proc print data = flight_adj; run;
