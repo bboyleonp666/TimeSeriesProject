@@ -13,6 +13,7 @@
 /*File Variable*/
 %let NetIncome_file = Flight_Comany_NetIncome_2005_2019.csv;
 %let Income_file = Flight_Comany_Income_2005_2019.csv;
+%let Oil_file = International_Price_of_Crude_Oil_2005_2019.csv;
 
 /*Data for Net Income*/
 data temp;
@@ -62,11 +63,34 @@ label
 if time < 200803 then delete;
 proc print data = flight_income label;
 run;
-/*Merge Income and Net Income*/
-data Flight;
-merge Flight_Income Flight_NetIncome ;
+/*Data for Crude Oil*/
+proc import datafile = "%datasets_dir\&Oil_file" out = temp 
+	dbms = csv replace;
+data Oil_Price;
+set temp;
+rename POILBREUSDM = Oil_Price;
+
+	/*Process Time Data*/
+	Year = year(date);
+	if month(date) = 1 then YEAR = year - 1;
+	if month(date) = 1 then MONTH = "12";
+	else MONTH = cat("0", month(date) - 1);
+	Time = cat(YEAR, MONTH);
+
+/*Keep year after 2008*/
+if time < 200803 then delete;
+/*Keep only two columns*/
+keep POILBREUSDM Time;
+proc sort;
 by time;
 proc print; run;
+
+/*Merge Income and Net Income*/
+data Flight;
+merge Flight_Income Flight_NetIncome Oil_Price;
+by time;
+proc print; run;
+
 
 /*Time Series Plots*/
 /*Income*/
@@ -212,9 +236,8 @@ proc varmax data = flight;
 run;
 
 proc varmax data = flight;
-model  net: / p = 1 
-					noint 
-					lagmax = 3 
-					print=(iarr estimates);
+model  net: / p = 1 dftest lagmax = 6 
+					print = (iarr estimates diagnose)
+					cointtest = (johansen=(normalize=net_china));
 cointeg rank = 1 normalize = net_china;
 run;
