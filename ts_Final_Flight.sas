@@ -144,10 +144,9 @@ set InfoTable_:;
 proc print data = AllModel; run;
 %mend VARModels;
 /*------------------------------------------------------------------------------------------------------------------*/
-%let out_html = output.html;
-%let out_path = %cwd\outputs;
-ods html file = "&out_html" path = "&out_path";
-
+/*Output as pdf file*/
+ods pdf file = "out.pdf";
+/*------------------------------------------------------------------------------------------------------------------*/
 /* read data
 	200803 - 201712 -- Flight(Train)
 	201803 - 201909 -- Test*/
@@ -384,4 +383,4 @@ ods select ChiSqAuto SeriesCorrPanel;
 run;
 /*Model : AR(5)*/
 
-ods html close;
+ods pdf close;
