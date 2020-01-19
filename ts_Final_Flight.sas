@@ -24,7 +24,7 @@
 %macro VARModel(dataset, var, P, DIF);
 ods select none;
 proc varmax data = &dataset;
-model &var / p = &P dify = (&DIF);
+model &var / p = &P;
 ods output LogLikelihood = LLH;
 ods output InfoCriteria = IC;
 /*output out=for lead=5;*/
@@ -48,12 +48,14 @@ run;
 ods select all;
 %mend VARModel;
 /*------------------------------------------------------------------------------------------------------------------*/
-%macro VARModels(dataset, var, DIF);
-%do i = 1 %to 5;
-	%VARModel(&dataset, &var, &i, &DIF);
+%macro VARModels(dataset, var);
+%do i = 1 %to 10;
+	%VARModel(&dataset, &var, &i);
 %end;
 data AllModel;
 set InfoTable_:;
+proc sort;
+by p;
 proc print data = AllModel; run;
 %mend VARModels;
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -237,6 +239,7 @@ yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=1
 xaxis label = "Season" labelattrs = (size=15);
 run;
 
+%let dataset = flight_adj;
 %let log_income = LogChina LogEva;           *Variables for all the log transformated income;
 %let log_net = net_LogChina net_LogEva;    *Variables for all the log transformated net income;
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -250,41 +253,36 @@ proc varmax data = flight_adj;
 model &log_income / p = 1 dftest;
 ods select DFTest;
 run;
-/*first-differentiated*/
-title "Dickey-Fuller Unit Root Test for 1st Diff Log Income";
-proc varmax data = flight_adj;
-model &log_income / p = 1 dify = (1) dftest;
-ods select DFTest;
-run;
-/*All are Stationary!!!*/
 
 /*Model selection for Operating Income*/
 title "Model Criterion for Log Income";
-%VARModels(flight_adj, &log_income, 1);
-/*Pick the one with smallest AIC value: 2*/
-title "Model for Log Income with p = 2";
+%VARModels(&dataset, &log_income);
+/*Pick the one with smallest AIC value: 4*/
+title "Model for Log Income with p = 4";
 proc varmax data = flight_adj;
-model &log_income / p = 2 noint lagmax = 3 dify = (1)
+model &log_income / p = 4 noint lagmax = 3
 									dftest cointtest=(johansen)
 									print = (estimates diagnose);
 run;
 /*Granger Causality Test*/
 title "Granger Causality Test";
 proc varmax data = flight_adj;
-model logchina logeva = LogOil / p = 2 difx = (1) dify = (1);
+model &log_income = LogOil / p = 4;
 causal group1 = (logchina logeva) group2 = (LogOil);
 causal group1 = (logchina) group2 = (LogOil);
 causal group1 = (logeva) group2 = (LogOil);
 causal group1 = (logeva) group2 = (logchina);
-/*ods select CausalityTest GroupVars;*/
+ods select CausalityTest GroupVars;
 run;
-/*
-proc varmax data = flight_adj plot = impulse;
-model logchina logeva = LogOil  / p = 2 difx = (1) dify = (1)
-													  printform = univariate
-													  print = (impulsx=(all) estimates);
+title "DF test for VARX(4, 0)";
+proc varmax data = flight_adj;
+model &log_income = LogOil / p = 4 dftest;
+ods select DFTest;
 run;
-*/
+title "VARX(4, 0) Model";
+proc varmax data = flight_adj;
+model &log_income = LogOil / p = 4 dftest;
+run;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Analysis for Net Income*/
 title "Dickey-Fuller Unit Root Test for Log Net Income";
@@ -292,33 +290,35 @@ proc varmax data = flight_adj;
 model &log_net / p = 1 dftest;
 ods select DFTest;
 run;
-/*Inspect Trend P-value
-   Some are non-stationary some are stationary*/
-title "Dickey-Fuller Unit Root Test for 1st Diff Log Net Income";
-proc varmax data = flight_adj;
-model &log_net / p = 1 dify = (1) dftest;
-ods select DFTest;
-run;
-/*All are Stationary!!!*/
+
 
 /*Model selection for Net income*/
 title "Model Criterion for Log Net Income";
-%VARModels(flight_adj, &log_net, 1);
-/*Min AIC: p = 2*/
-title "Model for Log Net Income with p = 2";
+%VARModels(&dataset, &log_net);
+/*Min AIC: p = 1*/
+title "Model for Log Net Income with p = 1";
 proc varmax data = flight_adj;
-model &log_net / p = 2 noint lagmax = 3 dify = (1)
+model &log_net / p = 1 noint lagmax = 3
 							dftest cointtest=(johansen)
 							print = (estimates diagnose);
 run;
 title "Granger Causality Test";
 proc varmax data = flight_adj;
-model net_log: =  LogOil / p = 2 dify = (1) difx = (1);
+model net_log: =  LogOil / p = 1;
 causal group1 = (net_LogChina net_LogEva) group2 = (LogOil);
 causal group1 = (net_LogChina) group2 = (LogOil);
 causal group1 = (net_LogEva) group2 = (LogOil);
 causal group1 = (net_logchina) group2 = (net_logeva);
 ods select CausalityTest GroupVars;
+run;
+title "DF test for VARX(1, 0)";
+proc varmax data = flight_adj;
+model net_log: =  LogOil / p = 1 dftest;
+ods select DFtest;
+run;
+title "VARX(1, 0) Model";
+proc varmax data = flight_adj;
+model net_log: =  LogOil / p = 1 dftest;
 run;
 /*
 proc varmax data = flight_adj plot = impulse;
