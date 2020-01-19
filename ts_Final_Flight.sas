@@ -20,6 +20,43 @@
 &cwd
 %mend cwd;
 /*------------------------------------------------------------------------------------------------------------------*/
+/*Model Selection for VAR*/
+%macro VARModel(dataset, var, P, DIF);
+ods select none;
+proc varmax data = &dataset;
+model &var / p = &P dify = (&DIF);
+ods output LogLikelihood = LLH;
+ods output InfoCriteria = IC;
+/*output out=for lead=5;*/
+run;
+data Info;
+set LLH IC;
+/*if _n_ in (1 4);*/
+drop cvalue1;
+if label1 = "對數概度" then label1 = "LogLike";
+rename 
+	label1 = Criterion
+	nvalue1 = Value;
+proc transpose data = Info 
+	out = Info_T(drop = _name_);
+var value;
+id Criterion;
+data InfoTable_&P;
+p = &P;
+set info_t;
+run;
+ods select all;
+%mend VARModel;
+/*------------------------------------------------------------------------------------------------------------------*/
+%macro VARModels(dataset, var, DIF);
+%do i = 1 %to 5;
+	%VARModel(&dataset, &var, &i, &DIF);
+%end;
+data AllModel;
+set InfoTable_:;
+proc print data = AllModel; run;
+%mend VARModels;
+/*------------------------------------------------------------------------------------------------------------------*/
 /*File Variable*/
 %let NetIncome_file = Flight_Comany_NetIncome_2005_2019.csv;
 %let Income_file = Flight_Comany_Income_2005_2019.csv;
@@ -98,51 +135,11 @@ data Flight;
 merge Flight_Income Flight_NetIncome Oil_Price;
 by time;
 drop income_airchina net_airchina; *drop data related to Air China;
-run;
-/*proc print; run;*/
-
 data Flight Test;
 set flight;
 if time <= "201812" then output Flight;
 else output Test;
 run;
-/*------------------------------------------------------------------------------------------------------------------*/
-/*Model Selection for VAR*/
-%macro VARModel(dataset, var, P, DIF);
-ods select none;
-proc varmax data = &dataset;
-model &var / p = &P dify = (&DIF);
-ods output LogLikelihood = LLH;
-ods output InfoCriteria = IC;
-/*output out=for lead=5;*/
-run;
-data Info;
-set LLH IC;
-if _n_ in (1 4);
-drop cvalue1;
-if label1 = "對數概度" then label1 = "LogLike";
-rename 
-	label1 = Criterion
-	nvalue1 = Value;
-proc transpose data = Info 
-	out = Info_T(drop = _name_);
-var value;
-id Criterion;
-data InfoTable_&P;
-p = &P;
-set info_t;
-run;
-ods select all;
-%mend VARModel;
-/*------------------------------------------------------------------------------------------------------------------*/
-%macro VARModels(dataset, var, DIF);
-%do i = 1 %to 5;
-	%VARModel(&dataset, &var, &i, &DIF);
-%end;
-data AllModel;
-set InfoTable_:;
-proc print data = AllModel; run;
-%mend VARModels;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Output as pdf file*/
 /*ods pdf file = "out.pdf";*/
@@ -161,6 +158,7 @@ var income: net: oil_price;
 data Flight_Std;
 set flight_std;
 term = _n_;
+run;
 /*proc print data = flight_Std; run;*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Time Series Plots*/
@@ -193,7 +191,7 @@ ods select ChowTest DiagnosticsPanel;
 run;
 
 /*Dataset Adjustment*/
-data flight_adj;
+data Flight_adj Fight_adj_NoTrim;
 set flight;
 /*Add min value to variables containing negative value
    Add 1 to avoid facing negative infinite problem when applying log transformation*/
@@ -212,11 +210,13 @@ label
 	LogEva = "長榮營收 (EVA)"
 	net_LogChina = "華航毛利 (China)"
 	net_LogEva = "長榮毛利 (EVA)";
-if _n_ > 7;
+if _n_ > 7 then output Flight_adj;
+if _n_ >= 1 then output Fight_adj_NoTrim;
+title "Adjust Flight Data Table -- Original Version";
+proc print data = Fight_adj_NoTrim; run;
+title "Adjust Flight Data Table -- Remove Terms before the Breakpoint";
+proc print data = Flight_adj; run;
 
-Term = _n_ - 7;
-title "Adjust Flight Data Table";
-proc print; run;
 
 /*We hope to keep the long term relation, so we kept the data after Term = 7*/
 proc sgplot data = flight_adj;
@@ -237,9 +237,8 @@ yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=1
 xaxis label = "Season" labelattrs = (size=15);
 run;
 
-%let dataset = flight_adj;                         *Name of dataset;
-%let log_income = Log:;                         *Variables for all the log transformated income;
-%let log_net = net_Log: LogOil;             *Variables for all the log transformated net income;
+%let log_income = LogChina LogEva;           *Variables for all the log transformated income;
+%let log_net = net_LogChina net_LogEva;    *Variables for all the log transformated net income;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Fit VAR model of income*/
 /*Analysis for Income*/
@@ -252,7 +251,7 @@ model &log_income / p = 1 dftest;
 ods select DFTest;
 run;
 /*first-differentiated*/
-title "Dickey-Fuller Unit Root Test for Diff Log Income";
+title "Dickey-Fuller Unit Root Test for 1st Diff Log Income";
 proc varmax data = flight_adj;
 model &log_income / p = 1 dify = (1) dftest;
 ods select DFTest;
@@ -261,7 +260,7 @@ run;
 
 /*Model selection for Operating Income*/
 title "Model Criterion for Log Income";
-%VARModels(&dataset, &log_income, 1);
+%VARModels(flight_adj, &log_income, 1);
 /*Pick the one with smallest AIC value: 2*/
 title "Model for Log Income with p = 2";
 proc varmax data = flight_adj;
@@ -277,7 +276,7 @@ causal group1 = (logchina logeva) group2 = (LogOil);
 causal group1 = (logchina) group2 = (LogOil);
 causal group1 = (logeva) group2 = (LogOil);
 causal group1 = (logeva) group2 = (logchina);
-ods select CausalityTest GroupVars;
+/*ods select CausalityTest GroupVars;*/
 run;
 /*
 proc varmax data = flight_adj plot = impulse;
@@ -295,7 +294,7 @@ ods select DFTest;
 run;
 /*Inspect Trend P-value
    Some are non-stationary some are stationary*/
-title "Dickey-Fuller Unit Root Test for Diff Log Net Income";
+title "Dickey-Fuller Unit Root Test for 1st Diff Log Net Income";
 proc varmax data = flight_adj;
 model &log_net / p = 1 dify = (1) dftest;
 ods select DFTest;
@@ -304,7 +303,7 @@ run;
 
 /*Model selection for Net income*/
 title "Model Criterion for Log Net Income";
-%VARModels(&dataset, &log_net, 1);
+%VARModels(flight_adj, &log_net, 1);
 /*Min AIC: p = 2*/
 title "Model for Log Net Income with p = 2";
 proc varmax data = flight_adj;
@@ -328,6 +327,7 @@ model net_log: = LogOil  / p = 2 dify = (1) difx = (1)
 										  print = (impulsx=(all) estimates);
 run;
 */
+
 
 /*Fit ARIMA model*/
 /*------------------------------------------------------------------------------------------------------------------*/
