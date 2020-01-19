@@ -281,7 +281,7 @@ ods select DFTest;
 run;
 title "VARX(4, 0) Model";
 proc varmax data = flight_adj;
-model &log_income = LogOil / p = 4 dftest;
+model &log_income = LogOil / p = 4 dftest noint;
 run;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Analysis for Net Income*/
@@ -290,7 +290,6 @@ proc varmax data = flight_adj;
 model &log_net / p = 1 dftest;
 ods select DFTest;
 run;
-
 
 /*Model selection for Net income*/
 title "Model Criterion for Log Net Income";
@@ -318,7 +317,7 @@ ods select DFtest;
 run;
 title "VARX(1, 0) Model";
 proc varmax data = flight_adj;
-model net_log: =  LogOil / p = 1 dftest;
+model net_log: =  LogOil / p = 1 dftest noint;
 run;
 /*
 proc varmax data = flight_adj plot = impulse;
