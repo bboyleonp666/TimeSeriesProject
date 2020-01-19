@@ -145,7 +145,7 @@ proc print data = AllModel; run;
 %mend VARModels;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Output as pdf file*/
-ods pdf file = "out.pdf";
+/*ods pdf file = "out.pdf";*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /* read data
 	200803 - 201712 -- Flight(Train)
@@ -158,6 +158,9 @@ proc print data = test; run;
 /*Standardize the data*/
 proc standard data = flight mean = 0 std = 1 out = Flight_Std;
 var income: net: oil_price;
+data Flight_Std;
+set flight_std;
+term = _n_;
 /*proc print data = flight_Std; run;*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Time Series Plots*/
@@ -182,6 +185,13 @@ yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10);
 xaxis label = "Season" labelattrs = (size=15);
 run;
 /*------------------------------------------------------------------------------------------------------------------*/
+title "Check Breakpoint of Log Income of China";
+proc autoreg data = flight_std;
+model net_china = term / chow = (5 6 7 8);
+model net_eva = term / chow = (10 11 12 13);
+ods select ChowTest DiagnosticsPanel;
+run;
+
 /*Dataset Adjustment*/
 data flight_adj;
 set flight;
@@ -202,10 +212,13 @@ label
 	LogEva = "長榮營收 (EVA)"
 	net_LogChina = "華航毛利 (China)"
 	net_LogEva = "長榮毛利 (EVA)";
-Term = _n_;
+if _n_ > 7;
+
+Term = _n_ - 7;
 title "Adjust Flight Data Table";
 proc print; run;
 
+/*We hope to keep the long term relation, so we kept the data after Term = 7*/
 proc sgplot data = flight_adj;
 title height = 25pt "Time Series Plot for Income and Oil Price";
 series x = time y = logchina/ lineattrs = (color=blue thickness=3);
@@ -223,18 +236,6 @@ series x = time y = net_logeva / lineattrs = (color=green thickness=3);
 yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10);
 xaxis label = "Season" labelattrs = (size=15);
 run;
-
-title "Check Breakpoint of Log Income of China";
-proc autoreg data = flight_adj;
-model logchina = term / chow = (5 6 7 8);
-model net_LogChina = term / chow = (2 3 4);
-ods select ChowTest DiagnosticsPanel;
-run;
-data flight_adj;
-set flight_adj;
-if Term > 7;
-run;
-/*We hope to keep the long term relation, so we kept the data after Term = 7*/
 
 %let dataset = flight_adj;                         *Name of dataset;
 %let log_income = Log:;                         *Variables for all the log transformated income;
@@ -273,7 +274,9 @@ title "Granger Causality Test";
 proc varmax data = flight_adj;
 model logchina logeva = LogOil / p = 2 difx = (1) dify = (1);
 causal group1 = (logchina logeva) group2 = (LogOil);
-causal group1 = (logchina) group2 = (logeva);
+causal group1 = (logchina) group2 = (LogOil);
+causal group1 = (logeva) group2 = (LogOil);
+causal group1 = (logeva) group2 = (logchina);
 ods select CausalityTest GroupVars;
 run;
 /*
@@ -312,7 +315,9 @@ run;
 title "Granger Causality Test";
 proc varmax data = flight_adj;
 model net_log: =  LogOil / p = 2 dify = (1) difx = (1);
-causal group1 = (net_log:) group2 = (LogOil);
+causal group1 = (net_LogChina net_LogEva) group2 = (LogOil);
+causal group1 = (net_LogChina) group2 = (LogOil);
+causal group1 = (net_LogEva) group2 = (LogOil);
 causal group1 = (net_logchina) group2 = (net_logeva);
 ods select CausalityTest GroupVars;
 run;
@@ -383,4 +388,4 @@ ods select ChiSqAuto SeriesCorrPanel;
 run;
 /*Model : AR(5)*/
 
-ods pdf close;
+/*ods pdf close;*/
