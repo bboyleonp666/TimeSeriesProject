@@ -279,8 +279,10 @@ proc varmax data = flight_adj;
 model &log_income = LogOil / p = 4 dftest;
 ods select DFTest;
 run;
+
+ods graphics on / width = 640px;
 title "VARX(4, 0) Model";
-proc varmax data = flight_adj;
+proc varmax data = flight_adj plot = impulse;
 model &log_income = LogOil / p = 4 dftest noint;
 run;
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -315,12 +317,14 @@ proc varmax data = flight_adj;
 model net_log: =  LogOil / p = 1 dftest;
 ods select DFtest;
 run;
+
+ods graphics on / width = 640px;
 title "VARX(1, 0) Model";
-proc varmax data = flight_adj;
+proc varmax data = flight_adj plot = impulse;
 model net_log: =  LogOil / p = 1 dftest noint;
 run;
 /*
-proc varmax data = flight_adj plot = impulse;
+proc varmax data = flight_adj;
 model net_log: = LogOil  / p = 2 dify = (1) difx = (1) 
 										  printform = univariate
 										  print = (impulsx=(all) estimates);
