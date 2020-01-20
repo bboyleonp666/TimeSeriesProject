@@ -136,15 +136,11 @@ run;
 data Flight;
 merge Flight_Income Flight_NetIncome Oil_Price;
 by time;
+season = cat(substr(time, 1, 4), cat("Q", substr(time, 5, 6) / 3));
 drop income_airchina net_airchina; *drop data related to Air China;
-data Flight Test;
-set flight;
-if time <= "201812" then output Flight;
-else output Test;
-run;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Output as pdf file*/
-/*ods pdf file = "out.pdf";*/
+ods pdf file = "SAS_outputs.pdf";
 /*------------------------------------------------------------------------------------------------------------------*/
 /* read data
 	200803 - 201712 -- Flight(Train)
@@ -168,20 +164,20 @@ run;
 ods graphics on / width = 1080px;
 proc sgplot data = flight_std;
 title height = 25pt "Time Series Plot for Income and Oil Price";
-series x = time y = income_china / lineattrs = (color=blue thickness=3);
-series x = time y = income_eva / lineattrs = (color=green thickness=3);
-series x = time y =  oil_price / lineattrs = (color=red thickness=3);
-yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10);
+series x = season y = income_china / lineattrs = (color=blue thickness=3);
+series x = season y = income_eva / lineattrs = (color=green thickness=3);
+series x = season y =  oil_price / lineattrs = (color=red thickness=3);
+yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10) values = (-3.5 to 4 by 1);
 xaxis label = "Season" labelattrs = (size=15);
 /*xaxis label = "Season" labelattrs = (size=15)  valuesrotate = diagnoal2;*/
 run;
 /*Net Income*/
 proc sgplot data = flight_std;
 title height = 25pt "Time Series Plot for Net Income and Oil Price";
-series x = time y = net_china / lineattrs = (color=blue thickness=3);
-series x = time y = net_eva / lineattrs = (color=green thickness=3);
-series x = time y =  oil_price / lineattrs = (color=red thickness=3);
-yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10);
+series x = season y = net_china / lineattrs = (color=blue thickness=3);
+series x = season y = net_eva / lineattrs = (color=green thickness=3);
+series x = season y =  oil_price / lineattrs = (color=red thickness=3);
+yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10)  values = (-3.5 to 4 by 1);
 xaxis label = "Season" labelattrs = (size=15);
 run;
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -192,8 +188,9 @@ model net_eva = term / chow = (10 11 12 13);
 ods select ChowTest DiagnosticsPanel;
 run;
 
+proc print data = flight; run;
 /*Dataset Adjustment*/
-data Flight_adj Fight_adj_NoTrim;
+data Test Flight_adj Fight_adj_NoTrim;
 set flight;
 /*Add min value to variables containing negative value
    Add 1 to avoid facing negative infinite problem when applying log transformation*/
@@ -212,19 +209,25 @@ label
 	LogEva = "篴犁Μ (EVA)"
 	net_LogChina = "地を (China)"
 	net_LogEva = "篴を (EVA)";
-if _n_ > 7 then output Flight_adj;
-if _n_ >= 1 then output Fight_adj_NoTrim;
-title "Adjust Flight Data Table -- Original Version";
-proc print data = Fight_adj_NoTrim; run;
+
+if time >= "201903" then output Test;
+if time > "200909" & time < "201903" then output Flight_adj;
+if time < "201903"  then output Fight_adj_NoTrim;
+
+title "Adjust Flight Data Table -- Test";
+proc print data = Test; run;
 title "Adjust Flight Data Table -- Remove Terms before the Breakpoint";
 proc print data = Flight_adj; run;
+title "Adjust Flight Data Table -- Original Version";
+proc print data = Fight_adj_NoTrim; run;
+
 
 
 /*We hope to keep the long term relation, so we kept the data after Term = 7*/
 proc sgplot data = flight_adj;
 title height = 25pt "Time Series Plot for Income and Oil Price";
-series x = time y = logchina/ lineattrs = (color=blue thickness=3);
-series x = time y = logeva / lineattrs = (color=green thickness=3);
+series x = season y = logchina/ lineattrs = (color=blue thickness=3);
+series x = season y = logeva / lineattrs = (color=green thickness=3);
 /*series x = time y =  logoil / lineattrs = (color=red thickness=3);*/
 yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10);
 xaxis label = "Season" labelattrs = (size=15);
@@ -232,8 +235,8 @@ run;
 /*Net Income*/
 proc sgplot data = flight_adj;
 title height = 25pt "Time Series Plot for Net Income and Oil Price";
-series x = time y = net_logchina / lineattrs = (color=blue thickness=3);
-series x = time y = net_logeva / lineattrs = (color=green thickness=3);
+series x = season y = net_logchina / lineattrs = (color=blue thickness=3);
+series x = season y = net_logeva / lineattrs = (color=green thickness=3);
 /*series x = time y =  oil_price / lineattrs = (color=red thickness=3);*/
 yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10);
 xaxis label = "Season" labelattrs = (size=15);
@@ -260,9 +263,10 @@ title "Model Criterion for Log Income";
 /*Pick the one with smallest AIC value: 4*/
 title "Model for Log Income with p = 4";
 proc varmax data = flight_adj;
-model &log_income / p = 4 noint lagmax = 3
+model &log_income / p = 4 lagmax = 3
 									dftest cointtest=(johansen)
 									print = (estimates diagnose);
+output lead =7 out = var_log_pred;
 run;
 /*Granger Causality Test*/
 title "Granger Causality Test";
@@ -273,17 +277,6 @@ causal group1 = (logchina) group2 = (LogOil);
 causal group1 = (logeva) group2 = (LogOil);
 causal group1 = (logeva) group2 = (logchina);
 ods select CausalityTest GroupVars;
-run;
-title "DF test for VARX(4, 0)";
-proc varmax data = flight_adj;
-model &log_income = LogOil / p = 4 dftest;
-ods select DFTest;
-run;
-
-ods graphics on / width = 640px;
-title "VARX(4, 0) Model";
-proc varmax data = flight_adj plot = impulse;
-model &log_income = LogOil / p = 4 dftest noint;
 run;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Analysis for Net Income*/
@@ -299,7 +292,7 @@ title "Model Criterion for Log Net Income";
 /*Min AIC: p = 1*/
 title "Model for Log Net Income with p = 1";
 proc varmax data = flight_adj;
-model &log_net / p = 1 noint lagmax = 3
+model &log_net / p = 1 lagmax = 3
 							dftest cointtest=(johansen)
 							print = (estimates diagnose);
 run;
@@ -321,16 +314,10 @@ run;
 ods graphics on / width = 640px;
 title "VARX(1, 0) Model";
 proc varmax data = flight_adj plot = impulse;
-model net_log: =  LogOil / p = 1 dftest noint;
+model net_log: =  LogOil / p = 1 lagnax=7 dftest  printform=univariate
+                         print=(impulsx=(all) estimates);
+output lead = 7  out = varx_netlog_pred;
 run;
-/*
-proc varmax data = flight_adj;
-model net_log: = LogOil  / p = 2 dify = (1) difx = (1) 
-										  printform = univariate
-										  print = (impulsx=(all) estimates);
-run;
-*/
-
 
 /*Fit ARIMA model*/
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -339,8 +326,9 @@ title "Fit Model for Log Income of China";
 proc arima data = Flight_adj;
 identify var = logchina nlag = 15 stationarity = (adf=4);
 estimate p = 5 method = ml;
-ods select ChiSqAuto StationarityTests SeriesCorrPanel ChiSqAuto ResidualCorrPanel  ModelDescription ARPolynomial;
+ods select ChiSqAuto StationarityTests SeriesCorrPanel ChiSqAuto ResidualCorrPanel  ModelDescription ARPolynomial  Forecasts;
 ods output ResidualCorrPanel = res_LogChina;
+forecast  id = term out = logchina_pred lead = 7;
 run;
 title "Fit Model for Log Income of China -- GARCH";
 data res_LogChina;
@@ -355,6 +343,8 @@ run;
 title "Log Net Income of China";
 proc arima data = Flight_adj;
 identify var = net_logchina nlag = 15 stationarity = (adf=4) ;
+estimate p = 5 ml;
+forecast  id = term out = net_logchina_pred lead = 7 ;
 run;
 /*Stationary*/
 
@@ -363,8 +353,9 @@ title "Fit Model for Log Income of EVA";
 proc arima data = Flight_adj;
 identify var = logeva(1) nlag = 15 stationarity = (adf=4);
 estimate p = 5 method = ml;
-ods select ChiSqAuto StationarityTests SeriesCorrPanel ChiSqAuto ResidualCorrPanel  ModelDescription ARPolynomial;
+ods select ChiSqAuto StationarityTests SeriesCorrPanel ChiSqAuto ResidualCorrPanel  ModelDescription ARPolynomial  Forecasts;
 ods output ResidualCorrPanel = res_LogEva;
+forecast  id = term out = logeva_pred lead = 7;
 run;
 data res_LogEva;
 set res_LogEva(keep = residual);
@@ -380,7 +371,8 @@ proc arima data = Flight_adj;
 identify var = net_logeva nlag = 15 stationarity = (adf=4) ;
 estimate p = 5 method = ml;
 ods output ResidualCorrPanel = res_netLogEva;
-ods select ChiSqAuto StationarityTests SeriesCorrPanel ChiSqAuto ResidualCorrPanel  ModelDescription ARPolynomial;
+ods select ChiSqAuto StationarityTests SeriesCorrPanel ChiSqAuto ResidualCorrPanel  ModelDescription ARPolynomial Forecasts;
+forecast  id = term out = net_logeva_pred lead = 7 ;
 run;
 data res_netLogEva;
 set res_netLogEva(keep = residual);
@@ -390,5 +382,115 @@ identify var = res_sq nlag = 12 stationarity = (adf=4);
 ods select ChiSqAuto SeriesCorrPanel;
 run;
 /*Model : AR(5)*/
+/*------------------------------------------------------------------------------------------------------------------*/
+/*VAR model Predict*/
+data temp_VarIncome;
+set var_log_pred;
+if logchina = .;
+rename
+	for1 = Var_China
+	for2 = Var_Eva;
+keep for1 for2;
+data temp_VarxNet;
+set varx_netlog_pred;
+if net_logchina = .;
+rename
+	for1= Varx_NetChina
+	for2 = Varx_NetEva;
+keep for1 for2;
 
-/*ods pdf close;*/
+/*AR model Predict*/
+data temp_ARChina;
+set logchina_pred;
+if LogChina = .;
+rename forecast = AR_China;
+keep forecast;
+data temp_AREva;
+set logeva_pred;
+if LogEva = .;
+rename forecast = AR_Eva;
+keep forecast;
+data temp_ARNetChina;
+set net_logchina_pred;
+if net_logchina = .;
+rename forecast = AR_NetChina;
+keep forecast;
+data temp_ARNetEva;
+set net_logeva_pred;
+if net_logeva = .;
+rename forecast = AR_NetEva;
+keep forecast;
+
+
+data Flight_pred;
+merge temp_VarIncome temp_VarxNet
+	temp_ARChina temp_AREva temp_ARNetChina temp_ARNetEva;
+input season $ @@;
+cards;
+	2019Q1 2019Q2 2019Q3 2019Q4
+	2020Q1 2020Q2 2019Q3
+;
+proc datasets lib = work nolist;
+    modify Flight_pred;
+		label
+			Var_China = "VAR 地犁Μ箇代 (China Income pred)"
+			Var_Eva = "VAR 篴犁Μ箇代 (EVA Income pred)"
+			Varx_NetChina = "VARX 地を箇代 (China Net Income pred)"
+			Varx_NetEva = "VARX 篴を箇代 (EVA Net Income pred)"
+			AR_China = "AR 地犁Μ箇代 (China Income pred)"
+			AR_Eva = "AR 篴犁Μ箇代 (EVA Income pred)"
+			AR_NetChina = "AR 地を箇代 (China Net Income pred)"
+			AR_NetEva = "AR 篴を箇代 (EVA Net Income pred)"
+		;
+proc print label; run;
+
+data Flight_Valid;
+merge Flight_pred test;
+if _n_ <= 3;
+proc print data = Flight_Valid; run;
+
+
+/*Validation Plot for Income*/
+proc sgplot data = flight_valid;
+title height = 20pt "Prediction and Validation Plot for Income of China Air";
+series x = season y = logchina/ lineattrs = (color=blue thickness=3);
+series x = season y = var_china/ lineattrs = (color=red thickness=3);
+series x = season y = AR_china / lineattrs = (color=green thickness=3);
+/*series x = time y =  logoil / lineattrs = (color=red thickness=3);*/
+yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10) values = (17.45 to 17.75 by 0.05);
+xaxis label = "Season" labelattrs = (size=15);
+run;
+proc sgplot data = flight_valid;
+title height = 20pt "Prediction and Validation Plot for Income of EVA Air";
+series x = season y = logeva/ lineattrs = (color=blue thickness=3);
+series x = season y = var_eva/ lineattrs = (color=red thickness=3);
+series x = season y = AR_eva / lineattrs = (color=green thickness=3);
+/*series x = time y =  logoil / lineattrs = (color=red thickness=3);*/
+yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10) values = (17.45 to 17.75 by 0.05);
+xaxis label = "Season" labelattrs = (size=15);
+run;
+
+/*Validation Plot for Net Income*/
+proc sgplot data = flight_valid;
+title height = 20pt "Prediction and Validation Plot for Net Income of China Air";
+series x = season y = net_logchina/ lineattrs = (color=blue thickness=3);
+series x = season y = varx_netchina/ lineattrs = (color=red thickness=3);
+series x = season y = AR_netchina / lineattrs = (color=green thickness=3);
+/*series x = time y =  logoil / lineattrs = (color=red thickness=3);*/
+yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10) values = (15.2 to 16 by 0.1);
+xaxis label = "Season" labelattrs = (size=15);
+run;
+proc sgplot data = flight_valid;
+title height = 20pt "Prediction and Validation Plot for Net Income of EVAAir";
+series x = season y = net_logeva/ lineattrs = (color=blue thickness=3);
+series x = season y = varx_neteva/ lineattrs = (color=red thickness=3);
+series x = season y = AR_neteva / lineattrs = (color=green thickness=3);
+/*series x = time y =  logoil / lineattrs = (color=red thickness=3);*/
+yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10) values = (15.2 to 16 by 0.1);
+xaxis label = "Season" labelattrs = (size=15);
+run;
+
+/*------------------------------------------------------------------------------------------------------------------*/
+/*Output as pdf*/
+ods pdf close;
+/*------------------------------------------------------------------------------------------------------------------*/
