@@ -6,19 +6,20 @@
 %let cwd = %sysfunc(pathname(&fr));
 %let rc = %sysfunc(filename(fr));
 
-%let data = data;
 %let datasets_dir = &cwd\data;
 &datasets_dir
 %mend datasets_dir;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Locate Dataset Directory*/
-%macro cwd;
+%macro images_dir;
 %local fr rc cwd;
 %let rc = %sysfunc(filename(fr,.));
 %let cwd = %sysfunc(pathname(&fr));
 %let rc = %sysfunc(filename(fr));
-&cwd
-%mend cwd;
+
+%let images_dir = &cwd\images;
+&images_dir
+%mend images_dir;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Model Selection for VAR*/
 %macro VARModel(dataset, var, P, DIF);
@@ -162,24 +163,29 @@ run;
 /*Time Series Plots*/
 /*Income*/
 ods graphics on / width = 1080px;
+ods listing gpath = "%images_dir";
+ods graphics / imagename = "Income and Oil Price" imagefmt = png;
 proc sgplot data = flight_std;
-title height = 25pt "Time Series Plot for Income and Oil Price";
+title height = 25pt "Income and Oil Price";
 series x = season y = income_china / lineattrs = (color=blue thickness=3);
 series x = season y = income_eva / lineattrs = (color=green thickness=3);
 series x = season y =  oil_price / lineattrs = (color=red thickness=3);
 yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10) values = (-3.5 to 4 by 1);
-xaxis label = "Season" labelattrs = (size=15);
-/*xaxis label = "Season" labelattrs = (size=15)  valuesrotate = diagnoal2;*/
+xaxis label = "Season" labelattrs = (size=15) valueattrs = (size = 7);
 run;
+ods graphics off;
 /*Net Income*/
+ods listing gpath = "%images_dir";
+ods graphics / imagename = "Net Income and Oil Price" imagefmt = png;
 proc sgplot data = flight_std;
-title height = 25pt "Time Series Plot for Net Income and Oil Price";
+title height = 25pt "Net Income and Oil Price";
 series x = season y = net_china / lineattrs = (color=blue thickness=3);
 series x = season y = net_eva / lineattrs = (color=green thickness=3);
 series x = season y =  oil_price / lineattrs = (color=red thickness=3);
 yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10)  values = (-3.5 to 4 by 1);
-xaxis label = "Season" labelattrs = (size=15);
+xaxis label = "Season" labelattrs = (size=15) valueattrs = (size = 7);
 run;
+ods graphics off;
 /*------------------------------------------------------------------------------------------------------------------*/
 title "Check Breakpoint of Log Income of China";
 proc autoreg data = flight_std;
@@ -222,30 +228,35 @@ title "Adjust Flight Data Table -- Original Version";
 proc print data = Fight_adj_NoTrim; run;
 
 
-
 /*We hope to keep the long term relation, so we kept the data after Term = 7*/
+ods listing gpath = "%images_dir";
+ods graphics / imagename = "Log Income and Oil Price" imagefmt = png;
 proc sgplot data = flight_adj;
-title height = 25pt "Time Series Plot for Income and Oil Price";
+title height = 25pt "Log Income and Oil Price";
 series x = season y = logchina/ lineattrs = (color=blue thickness=3);
 series x = season y = logeva / lineattrs = (color=green thickness=3);
 /*series x = time y =  logoil / lineattrs = (color=red thickness=3);*/
 yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10);
 xaxis label = "Season" labelattrs = (size=15);
 run;
+ods graphics off;
 /*Net Income*/
+ods listing gpath = "%images_dir";
+ods graphics / imagename = "Log Net Income and Oil Price" imagefmt = png;
 proc sgplot data = flight_adj;
-title height = 25pt "Time Series Plot for Net Income and Oil Price";
+title height = 25pt "Log Net Income and Oil Price";
 series x = season y = net_logchina / lineattrs = (color=blue thickness=3);
 series x = season y = net_logeva / lineattrs = (color=green thickness=3);
 /*series x = time y =  oil_price / lineattrs = (color=red thickness=3);*/
 yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10);
 xaxis label = "Season" labelattrs = (size=15);
 run;
+ods graphics off;
 
-%let dataset = flight_adj;
+/*------------------------------------------------------------------------------------------------------------------*/
+%let dataset = flight_adj;                                *Data set;
 %let log_income = LogChina LogEva;           *Variables for all the log transformated income;
 %let log_net = net_LogChina net_LogEva;    *Variables for all the log transformated net income;
-/*------------------------------------------------------------------------------------------------------------------*/
 /*Fit VAR model of income*/
 /*Analysis for Income*/
 /*Dickey-Fuller Test
@@ -307,14 +318,16 @@ ods select CausalityTest GroupVars;
 run;
 title "DF test for VARX(1, 0)";
 proc varmax data = flight_adj;
-model net_log: =  LogOil / p = 1 dftest;
+model &log_net =  LogOil / p = 1 dftest;
 ods select DFtest;
 run;
 
 ods graphics on / width = 640px;
+ods listing gpath = "D:\時間數列分析\Final_project\images";
+ods graphics / imagename = "Impulse" imagefmt = png;
 title "VARX(1, 0) Model";
 proc varmax data = flight_adj plot = impulse;
-model net_log: =  LogOil / p = 1 lagnax=7 dftest  printform=univariate
+model &log_net =  LogOil / p = 1 lagnax=7 dftest  printform=univariate
                          print=(impulsx=(all) estimates);
 output lead = 7  out = varx_netlog_pred;
 run;
@@ -449,10 +462,11 @@ merge Flight_pred test;
 if _n_ <= 3;
 proc print data = Flight_Valid; run;
 
-
 /*Validation Plot for Income*/
+ods listing gpath = "%images_dir";
+ods graphics / imagename = "Prediction for Income of China Air" imagefmt = png;
 proc sgplot data = flight_valid;
-title height = 20pt "Prediction and Validation Plot for Income of China Air";
+title height = 20pt "Prediction for Income of China Air";
 series x = season y = logchina/ lineattrs = (color=blue thickness=3);
 series x = season y = var_china/ lineattrs = (color=red thickness=3);
 series x = season y = AR_china / lineattrs = (color=green thickness=3);
@@ -460,8 +474,12 @@ series x = season y = AR_china / lineattrs = (color=green thickness=3);
 yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10) values = (17.45 to 17.75 by 0.05);
 xaxis label = "Season" labelattrs = (size=15);
 run;
+ods graphics off;
+
+ods listing gpath = "%images_dir";
+ods graphics / imagename = "Prediction for Income of EVA Air" imagefmt = png;
 proc sgplot data = flight_valid;
-title height = 20pt "Prediction and Validation Plot for Income of EVA Air";
+title height = 20pt "Prediction for Income of EVA Air";
 series x = season y = logeva/ lineattrs = (color=blue thickness=3);
 series x = season y = var_eva/ lineattrs = (color=red thickness=3);
 series x = season y = AR_eva / lineattrs = (color=green thickness=3);
@@ -469,10 +487,12 @@ series x = season y = AR_eva / lineattrs = (color=green thickness=3);
 yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10) values = (17.45 to 17.75 by 0.05);
 xaxis label = "Season" labelattrs = (size=15);
 run;
-
+ods graphics off;
 /*Validation Plot for Net Income*/
+ods listing gpath = "%images_dir";
+ods graphics / imagename = "Prediction for Net Income of China Air" imagefmt = png;
 proc sgplot data = flight_valid;
-title height = 20pt "Prediction and Validation Plot for Net Income of China Air";
+title height = 20pt "Prediction for Net Income of China Air";
 series x = season y = net_logchina/ lineattrs = (color=blue thickness=3);
 series x = season y = varx_netchina/ lineattrs = (color=red thickness=3);
 series x = season y = AR_netchina / lineattrs = (color=green thickness=3);
@@ -480,8 +500,12 @@ series x = season y = AR_netchina / lineattrs = (color=green thickness=3);
 yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10) values = (15.2 to 16 by 0.1);
 xaxis label = "Season" labelattrs = (size=15);
 run;
+ods graphics off;
+
+ods listing gpath = "%images_dir";
+ods graphics / imagename = "Prediction for Net Income of EVAAir" imagefmt = png;
 proc sgplot data = flight_valid;
-title height = 20pt "Prediction and Validation Plot for Net Income of EVAAir";
+title height = 20pt "Prediction for Net Income of EVAAir";
 series x = season y = net_logeva/ lineattrs = (color=blue thickness=3);
 series x = season y = varx_neteva/ lineattrs = (color=red thickness=3);
 series x = season y = AR_neteva / lineattrs = (color=green thickness=3);
@@ -489,7 +513,29 @@ series x = season y = AR_neteva / lineattrs = (color=green thickness=3);
 yaxis label = "Log Transformed Data" labelattrs = (size=15) valueattrs = (size=10) values = (15.2 to 16 by 0.1);
 xaxis label = "Season" labelattrs = (size=15);
 run;
+ods graphics off;
 
+/*Compute RMSE*/
+data Res;
+set Flight_Valid;
+res_VAR_China = (Var_China - LogChina)**2;
+res_AR_China = (AR_China - LogChina)**2;
+
+res_VAR_Eva = (Var_Eva - LogEva)**2;
+res_AR_Eva = (AR_Eva - LogEva)**2;
+
+res_VARX_NetChina = (Varx_NetChina - net_LogChina)**2;
+res_AR_NetChina = (AR_NetChina - net_LogChina)**2;
+
+res_VARX_NetEva = (Varx_NetEva - net_LogEva)**2;
+res_AR_NetChina = (AR_NetEva - net_LogEva)**2;
+
+res_VAR_Income = sum(of res_VAR_China res_VAR_Eva);
+res_AR_Income = sum(of res_AR_China res_AR_Eva);
+res_VARX_Net = sum(of res_VARX_NetChina res_VARX_NetEva);
+res_AR_Net = sum(of res_AR_NetChina res_AR_NetChina);
+keep res:;
+proc means data = res; run;
 /*------------------------------------------------------------------------------------------------------------------*/
 /*Output as pdf*/
 ods pdf close;
