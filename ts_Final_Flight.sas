@@ -171,7 +171,7 @@ series x = season y = income_china / lineattrs = (color=blue thickness=3);
 series x = season y = income_eva / lineattrs = (color=green thickness=3);
 series x = season y =  oil_price / lineattrs = (color=red thickness=3);
 yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10) values = (-3.5 to 4 by 1);
-xaxis label = "Season" labelattrs = (size=15) valueattrs = (size = 7);
+xaxis label = "Season" labelattrs = (size=15) valueattrs = (size = 6);
 run;
 ods graphics off;
 /*Net Income*/
@@ -183,7 +183,7 @@ series x = season y = net_china / lineattrs = (color=blue thickness=3);
 series x = season y = net_eva / lineattrs = (color=green thickness=3);
 series x = season y =  oil_price / lineattrs = (color=red thickness=3);
 yaxis label = "Normalized Data" labelattrs = (size=15) valueattrs = (size=10)  values = (-3.5 to 4 by 1);
-xaxis label = "Season" labelattrs = (size=15) valueattrs = (size = 7);
+xaxis label = "Season" labelattrs = (size=15) valueattrs = (size = 6);
 run;
 ods graphics off;
 /*------------------------------------------------------------------------------------------------------------------*/
